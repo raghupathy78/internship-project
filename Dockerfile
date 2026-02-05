@@ -6,6 +6,8 @@ RUN apt-get update \
     && pecl install mongodb \
     && docker-php-ext-enable mongodb \
     && docker-php-ext-install pdo pdo_mysql \
+    && a2dismod mpm_event mpm_worker || true \
+    && a2enmod mpm_prefork || true \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
