@@ -1,0 +1,6 @@
+{
+  "$schema": "https://raw.githubusercontent.com/railwayapp/railway/master/packages/cli/schemas/config.json",
+  "build": {
+    "builder": "dockerfile"
+  }
+}
