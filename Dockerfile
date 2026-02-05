@@ -1,8 +1,7 @@
 FROM php:8.2-fpm-alpine
 
-# Install Apache and required PHP modules
-RUN apk add --no-cache apache2 apache2-proxy && \
-    apk add --no-cache openssl openssl-dev pkgconfig
+# Install Nginx (no MPM conflicts)
+RUN apk add --no-cache nginx openssl openssl-dev pkgconfig
 
 # Install mongodb extension
 RUN apk add --no-cache autoconf gcc g++ make && \
@@ -11,22 +10,30 @@ RUN apk add --no-cache autoconf gcc g++ make && \
     docker-php-ext-install pdo pdo_mysql && \
     apk del autoconf gcc g++ make
 
-# Configure Apache with only mpm_prefork
-RUN mkdir -p /etc/apache2/conf.d && \
-    echo 'LoadModule mpm_prefork_module modules/mod_mpm_prefork.so' > /etc/apache2/conf.d/mpm.conf && \
-    echo 'LoadModule authz_core_module modules/mod_authz_core.so' >> /etc/apache2/conf.d/mpm.conf && \
-    echo 'LoadModule authz_user_module modules/mod_authz_user.so' >> /etc/apache2/conf.d/mpm.conf && \
-    echo '<FilesMatch ".+\.php$">' >> /etc/apache2/conf.d/php-handler.conf && \
-    echo '  SetHandler "proxy:unix:/run/php-fpm.sock|fcgi://localhost"' >> /etc/apache2/conf.d/php-handler.conf && \
-    echo '</FilesMatch>' >> /etc/apache2/conf.d/php-handler.conf
+# Configure Nginx to proxy PHP requests to FPM
+RUN mkdir -p /etc/nginx/conf.d && \
+    echo 'upstream php-fpm {' > /etc/nginx/conf.d/upstream.conf && \
+    echo '    server unix:/run/php-fpm.sock;' >> /etc/nginx/conf.d/upstream.conf && \
+    echo '}' >> /etc/nginx/conf.d/upstream.conf && \
+    echo '' >> /etc/nginx/conf.d/upstream.conf && \
+    echo 'server {' >> /etc/nginx/conf.d/default.conf && \
+    echo '    listen 80 default_server;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    root /var/www/html;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    index index.php;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    location ~ \.php$ {' >> /etc/nginx/conf.d/default.conf && \
+    echo '        fastcgi_pass php-fpm;' >> /etc/nginx/conf.d/default.conf && \
+    echo '        fastcgi_index index.php;' >> /etc/nginx/conf.d/default.conf && \
+    echo '        include fastcgi.conf;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    }' >> /etc/nginx/conf.d/default.conf && \
+    echo '}' >> /etc/nginx/conf.d/default.conf
 
 COPY . /var/www/html/
 RUN chown -R www-data:www-data /var/www/html
 
 EXPOSE 80
 
-# Start PHP-FPM in background and Apache in foreground
-CMD ["sh", "-c", "php-fpm -D && apachectl -D FOREGROUND"]
+# Start PHP-FPM and Nginx
+CMD ["sh", "-c", "php-fpm -D && nginx -g 'daemon off;'"]
 FROM php:8.2-apache
 
 # Disable conflicting Apache MPMs and install extensions
