@@ -54,29 +54,36 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if (Get-Command docker -ErrorAction SilentlyContinue) {
-    Write-Host "2) Building Docker image locally to verify MongoDB extension"
-    $imageTag = "internship-project:test"
-    docker build -t $imageTag .
+    # Check if Docker daemon is responding
+    docker info > $null 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Docker build failed. Fix Dockerfile then re-run." -ForegroundColor Red
-        exit 1
-    }
+        Write-Host "Docker CLI found but daemon not responding; skipping local image and composer checks." -ForegroundColor Yellow
+        Write-Host "Start Docker Desktop and ensure the daemon is running, then re-run this script to perform local checks." -ForegroundColor Yellow
+    } else {
+        Write-Host "2) Building Docker image locally to verify MongoDB extension"
+        $imageTag = "internship-project:test"
+        docker build -t $imageTag .
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Docker build failed. Fix Dockerfile then re-run." -ForegroundColor Red
+            exit 1
+        }
 
-    Write-Host "Checking for mongodb extension inside container (php -m)"
-    docker run --rm $imageTag php -m | Select-String -Pattern "mongodb" | ForEach-Object { Write-Host $_ }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: mongodb extension not found in container output." -ForegroundColor Yellow
-        Write-Host "Continue to push/deploy, but Composer may still fail on remote builds." -ForegroundColor Yellow
-    }
+        Write-Host "Checking for mongodb extension inside container (php -m)"
+        docker run --rm $imageTag php -m | Select-String -Pattern "mongodb" | ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Warning: mongodb extension not found in container output." -ForegroundColor Yellow
+            Write-Host "Continue to push/deploy, but Composer may still fail on remote builds." -ForegroundColor Yellow
+        }
 
-    Write-Host "3) Running composer install using official composer image (verifies dependencies)"
-    docker run --rm -v ${PWD}:/app -w /app composer:2 composer install --optimize-autoloader --no-scripts --no-interaction
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Composer reported errors. Inspect above output. If missing ext-mongodb, the remote build must install the extension." -ForegroundColor Red
+        Write-Host "3) Running composer install using official composer image (verifies dependencies)"
+        docker run --rm -v ${PWD}:/app -w /app composer:2 composer install --optimize-autoloader --no-scripts --no-interaction
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Composer reported errors. Inspect above output. If missing ext-mongodb, the remote build must install the extension." -ForegroundColor Red
+        }
     }
 } else {
-    Write-Host "Docker CLI not found or Docker daemon not running; skipping local image and composer checks." -ForegroundColor Yellow
-    Write-Host "To run local checks, install/start Docker Desktop and ensure 'docker --version' works." -ForegroundColor Yellow
+    Write-Host "Docker CLI not installed; skipping local image and composer checks." -ForegroundColor Yellow
+    Write-Host "To run local checks, install Docker Desktop and ensure 'docker --version' works." -ForegroundColor Yellow
 }
 
 Write-Host "4) Deploying to Railway (if Railway CLI is installed)"
@@ -87,8 +94,8 @@ if (Get-Command railway -ErrorAction SilentlyContinue) {
         $env:RAILWAY_TOKEN = $RailwayToken
     }
 
-    Write-Host "Railway CLI found. Running: railway up --branch $Branch"
-    railway up --branch $Branch
+    Write-Host "Railway CLI found. Running: railway up (deploy current directory/branch)"
+    railway up
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Railway deploy failed. Run 'railway up' interactively or check Railway project link." -ForegroundColor Red
         exit 1
