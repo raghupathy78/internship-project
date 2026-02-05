@@ -19,7 +19,8 @@ What it does:
 
 param(
     [string]$Branch = "add-mongodb-extension",
-    [string]$RailwayToken = $null
+    [string]$RailwayToken = $null,
+    [string]$RailwayProject = $null
 )
 
 function Run($cmd) {
@@ -94,7 +95,17 @@ if (Get-Command railway -ErrorAction SilentlyContinue) {
         $env:RAILWAY_TOKEN = $RailwayToken
     }
 
-    Write-Host "Railway CLI found. Running: railway up (deploy current directory/branch)"
+    Write-Host "Railway CLI found. Ensuring project is linked..."
+    # If user provided a project identifier, try to link non-interactively
+    if ($RailwayProject) {
+        Write-Host "Linking to Railway project: $RailwayProject"
+        railway link $RailwayProject --yes 2>$null
+    } else {
+        Write-Host "No Railway project provided; attempting to auto-link interactively (you may be prompted)."
+        railway link
+    }
+
+    Write-Host "Running: railway up (deploy current directory/branch)"
     railway up
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Railway deploy failed. Run 'railway up' interactively or check Railway project link." -ForegroundColor Red
