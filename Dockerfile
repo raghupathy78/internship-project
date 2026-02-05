@@ -1,10 +1,8 @@
 FROM php:8.2-apache
 
 # Disable conflicting Apache MPMs and install extensions
-RUN # ensure only prefork MPM is present: remove other MPM load files if any
-    rm -rf /etc/apache2/mods-enabled/* || true \
-    && # ensure mods-available has prefork files then link only those into mods-enabled
-    ( [ -f /etc/apache2/mods-available/mpm_prefork.load ] && ln -s /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load ) || true \
+RUN rm -rf /etc/apache2/mods-enabled/* || true \
+    && ( [ -f /etc/apache2/mods-available/mpm_prefork.load ] && ln -s /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load ) || true \
     && ( [ -f /etc/apache2/mods-available/mpm_prefork.conf ] && ln -s /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf ) || true \
     && a2enmod mpm_prefork || true \
     && apt-get update \
