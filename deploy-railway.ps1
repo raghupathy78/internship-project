@@ -18,7 +18,8 @@ What it does:
 #>
 
 param(
-    [string]$Branch = "add-mongodb-extension"
+    [string]$Branch = "add-mongodb-extension",
+    [string]$RailwayToken = $null
 )
 
 function Run($cmd) {
@@ -75,6 +76,12 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "4) Deploying to Railway (if Railway CLI is installed)"
 if (Get-Command railway -ErrorAction SilentlyContinue) {
+    if ($RailwayToken) {
+        Write-Host "Setting RAILWAY_TOKEN environment variable (persistent)"
+        setx RAILWAY_TOKEN $RailwayToken | Out-Null
+        $env:RAILWAY_TOKEN = $RailwayToken
+    }
+
     Write-Host "Railway CLI found. Running: railway up --branch $Branch"
     railway up --branch $Branch
     if ($LASTEXITCODE -ne 0) {
@@ -83,6 +90,7 @@ if (Get-Command railway -ErrorAction SilentlyContinue) {
     }
 } else {
     Write-Host "Railway CLI not installed. Install it and run 'railway login' then: railway up --branch $Branch" -ForegroundColor Yellow
+    Write-Host "To install: npm install -g @railway/cli" -ForegroundColor Yellow
 }
 
 Write-Host "Done. Check Railway build logs to confirm ext-mongodb installed and composer succeeded." -ForegroundColor Green
