@@ -14,10 +14,7 @@ RUN rm -rf /etc/apache2/mods-enabled/* || true \
     && rm -rf /var/lib/apt/lists/*
 
 # Diagnostics: show enabled mods at build time
-RUN echo "---- /etc/apache2/mods-enabled ----" \
-    && ls -la /etc/apache2/mods-enabled || true \
-    && echo "---- file contents ----" \
-    && for f in /etc/apache2/mods-enabled/*; do echo "== $f =="; [ -f "$f" ] && cat "$f" || true; done || true
+RUN echo "---- /etc/apache2/mods-enabled ----" && ls -la /etc/apache2/mods-enabled && echo "---- file contents ----" && for f in /etc/apache2/mods-enabled/*; do echo "== $f =="; cat "$f"; done
 
 COPY . /var/www/html/
 
