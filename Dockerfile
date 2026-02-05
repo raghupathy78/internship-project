@@ -1,7 +1,9 @@
 FROM php:8.2-apache
 
-# Install required system libs, MongoDB extension, and core PHP extensions
-RUN apt-get update \
+# Disable conflicting Apache MPMs and install extensions
+RUN a2dismod mpm_event mpm_worker || true \
+    && a2enmod mpm_prefork || true \
+    && apt-get update \
     && apt-get install -y --no-install-recommends libssl-dev pkg-config \
     && pecl install mongodb \
     && docker-php-ext-enable mongodb \
