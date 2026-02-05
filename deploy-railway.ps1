@@ -101,14 +101,14 @@ if (Get-Command railway -ErrorAction SilentlyContinue) {
         $env:RAILWAY_TOKEN = $RailwayToken
     }
 
-    Write-Host "Railway CLI found. Running: railway up --branch $Branch"
-    railway up --branch $Branch
+    Write-Host "Railway CLI found. Running: railway up"
+    railway up
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Railway deploy failed. Run 'railway up' interactively or check Railway project link." -ForegroundColor Red
+        Write-Host "Railway deploy failed. Check if project is linked via 'railway link' or use Railway dashboard." -ForegroundColor Red
         exit 1
     }
 } else {
-    Write-Host "Railway CLI not installed. Install it and run 'railway login' then: railway up --branch $Branch" -ForegroundColor Yellow
+    Write-Host "Railway CLI not installed. Install it and run 'railway login' then: railway up" -ForegroundColor Yellow
     Write-Host "To install: npm install -g @railway/cli" -ForegroundColor Yellow
 }
 
