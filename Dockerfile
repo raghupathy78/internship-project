@@ -1,43 +1,32 @@
-FROM php:8.2-fpm
+FROM php:8.2-fpm-alpine
 
 # Install Apache and required PHP modules
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends apache2 apache2-mod-fcgid && \
-    apt-get install -y --no-install-recommends libssl-dev pkg-config && \
+RUN apk add --no-cache apache2 apache2-proxy && \
+    apk add --no-cache openssl openssl-dev pkgconfig
+
+# Install mongodb extension
+RUN apk add --no-cache autoconf gcc g++ make && \
     pecl install mongodb && \
     docker-php-ext-enable mongodb && \
     docker-php-ext-install pdo pdo_mysql && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    apk del autoconf gcc g++ make
 
-# Disable conflicting MPMs if present and enable only prefork
-RUN a2dismod mpm_event mpm_worker mpm_async 2>/dev/null || true && \
-    a2enmod mpm_prefork 2>/dev/null || true && \
-    a2enmod proxy && \
-    a2enmod proxy_fcgi && \
-    a2enmod setenvif
-
-# Configure Apache to use PHP-FPM
-RUN mkdir -p /etc/apache2/conf-available && \
-    echo '<IfModule mod_version.c>' > /etc/apache2/conf-available/php-fpm.conf && \
-    echo '  <IfVersion >= 2.4.26>' >> /etc/apache2/conf-available/php-fpm.conf && \
-    echo '    <FilesMatch ".+\.php$">' >> /etc/apache2/conf-available/php-fpm.conf && \
-    echo '      SetHandler "proxy:unix:/run/php/php-fpm.sock|fcgi://localhost/"' >> /etc/apache2/conf-available/php-fpm.conf && \
-    echo '    </FilesMatch>' >> /etc/apache2/conf-available/php-fpm.conf && \
-    echo '  </IfVersion>' >> /etc/apache2/conf-available/php-fpm.conf && \
-    echo '</IfModule>' >> /etc/apache2/conf-available/php-fpm.conf && \
-    a2enconf php-fpm
-
-# Enable Apache modules for mod_php 
-RUN a2enmod php8.2 2>/dev/null || true
+# Configure Apache with only mpm_prefork
+RUN mkdir -p /etc/apache2/conf.d && \
+    echo 'LoadModule mpm_prefork_module modules/mod_mpm_prefork.so' > /etc/apache2/conf.d/mpm.conf && \
+    echo 'LoadModule authz_core_module modules/mod_authz_core.so' >> /etc/apache2/conf.d/mpm.conf && \
+    echo 'LoadModule authz_user_module modules/mod_authz_user.so' >> /etc/apache2/conf.d/mpm.conf && \
+    echo '<FilesMatch ".+\.php$">' >> /etc/apache2/conf.d/php-handler.conf && \
+    echo '  SetHandler "proxy:unix:/run/php-fpm.sock|fcgi://localhost"' >> /etc/apache2/conf.d/php-handler.conf && \
+    echo '</FilesMatch>' >> /etc/apache2/conf.d/php-handler.conf
 
 COPY . /var/www/html/
 RUN chown -R www-data:www-data /var/www/html
 
 EXPOSE 80
 
-# Start both PHP-FPM and Apache
-CMD ["sh", "-c", "php-fpm -D && apache2ctl -D FOREGROUND"]
+# Start PHP-FPM in background and Apache in foreground
+CMD ["sh", "-c", "php-fpm -D && apachectl -D FOREGROUND"]
 FROM php:8.2-apache
 
 # Disable conflicting Apache MPMs and install extensions
