@@ -1,24 +1,43 @@
-﻿FROM php:8.2-apache
+﻿FROM php:8.2-fpm
 
-# Completely disable conflicting MPMs by removing their config files
-RUN rm /etc/apache2/mods-available/mpm_event.* /etc/apache2/mods-available/mpm_worker.* 2>/dev/null || true
-
-# Clear all enabled modules and rebuild
-RUN rm -rf /etc/apache2/mods-enabled/* && mkdir -p /etc/apache2/mods-enabled
-
-# Enable only prefork MPM
-RUN ln -s /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load && \
-    ln -s /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf
-
-# Install dependencies and MongoDB driver
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libssl-dev pkg-config \
-    && pecl install mongodb \
-    && docker-php-ext-enable mongodb \
-    && docker-php-ext-install pdo pdo_mysql \
+# Install Apache and other dependencies
+RUN apt-get update && apt-get install -y \
+    apache2 \
+    libapache2-mod-fcgid \
+    libssl-dev \
+    pkg-config \
+    && a2enmod fcgid \
+    && a2enmod proxy \
+ && a2enmod proxy_fcgi \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Install MongoDB driver
+RUN pecl install mongodb && docker-php-ext-enable mongodb
+
+# Install PDO extensions
+RUN docker-php-ext-install pdo pdo_mysql
+
+# Configure Apache virtual host for PHP-FPM
+RUN echo '<VirtualHost *:80>\n\
+    ServerAdmin admin@localhost\n\
+    DocumentRoot /var/www/html\n\
+    <Directory /var/www/html>\n\
+        Options Indexes FollowSymLinks\n\
+        AllowOverride All\n\
+        Require all granted\n\
+    </Directory>\n\
+    <FilesMatch \.php$>\n\
+        SetHandler \"proxy:unix:/run/php-fpm.sock|fcgi://localhost\"\n\
+    </FilesMatch>\n\
+</VirtualHost>' > /etc/apache2/sites-available/000-default.conf
+
+WORKDIR /var/www/html
+
 COPY . /var/www/html/
 
+RUN mkdir -p /run/php-fpm && chown -R www-data:www-data /var/www/html
+
 EXPOSE 80
+
+CMD ["sh", "-c", "php-fpm --daemonize && apache2ctl -D FOREGROUND"]
