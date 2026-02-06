@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "80:80"
+    environment:
+      - PHP_TIMEZONE=UTC
+    volumes:
+      - ./:/var/www/html
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/test.php"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

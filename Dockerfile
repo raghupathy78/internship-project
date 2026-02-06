@@ -1,52 +1,67 @@
 ﻿FROM php:8.2-fpm
 
-# Install Nginx
-RUN apt-get update && apt-get install -y nginx && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nginx \
+    curl \
+    libssl-dev \
+    pkg-config \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install MongoDB extension
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends libssl-dev pkg-config && \
-    pecl install mongodb && \
+# Install PHP extensions
+RUN pecl install mongodb && \
     docker-php-ext-enable mongodb && \
-    docker-php-ext-install pdo pdo_mysql && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    docker-php-ext-install pdo pdo_mysql
 
-# Disable default Nginx config
-RUN rm -f /etc/nginx/sites-enabled/default
+# Create application directory
+WORKDIR /var/www/html
 
-# Create working Nginx config
-RUN cat > /etc/nginx/conf.d/app.conf << 'EOF'
-upstream php {
-    server 127.0.0.1:9000;
+# Copy application files
+COPY . /var/www/html/
+
+# Set proper permissions
+RUN chown -R www-data:www-data /var/www/html
+
+# Configure PHP-FPM
+RUN cat > /usr/local/etc/php-fpm.d/zzz-app.conf << 'PHPFPM'
+[global]
+daemonize = no
+
+[www]
+listen = 127.0.0.1:9000
+pm = static
+pm.max_children = 10
+PHPFPM
+
+# Configure Nginx
+RUN rm -f /etc/nginx/sites-enabled/* /etc/nginx/conf.d/default.conf && \
+    cat > /etc/nginx/conf.d/app.conf << 'NGINX'
+upstream php_fpm {
+  server 127.0.0.1:9000;
 }
 
 server {
-    listen 80;
-    server_name _;
-    root /var/www/html;
-    index index.php index.html;
-
-    client_max_body_size 20M;
-
-    location ~ \.php$ {
-        fastcgi_pass php;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME \\;
-        include fastcgi_params;
-    }
-    
-    location / {
-        try_files \ \/ /index.php?\;
-    }
+  listen 80 default_server;
+  listen [::]:80 default_server;
+  
+  server_name _;
+  root /var/www/html;
+  index index.php index.html index.htm;
+  
+  location ~ \.php$ {
+    fastcgi_pass php_fpm;
+    fastcgi_index index.php;
+    fastcgi_param SCRIPT_FILENAME \\;
+    include fastcgi_params;
+  }
+  
+  location / {
+    try_files \ \/ /index.php?\;
+  }
 }
-EOF
-
-WORKDIR /var/www/html
-COPY . /var/www/html/
-
-RUN chown -R www-data:www-data /var/www/html
+NGINX
 
 EXPOSE 80
 
-# Start services
-CMD ["bash", "-c", "php-fpm --daemonize && nginx -g 'daemon off;'"]
+# Run both services
+CMD ["sh", "-c", "php-fpm & nginx -g 'daemon off;'"]
