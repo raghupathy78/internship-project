@@ -1,5 +1,9 @@
 ﻿FROM php:8.2-apache
 
+# Disable conflicting Apache MPMs by renaming their load files
+RUN mv /etc/apache2/mods-available/mpm_event.load /etc/apache2/mods-available/mpm_event.load.bak 2>/dev/null || true \
+    && mv /etc/apache2/mods-available/mpm_worker.load /etc/apache2/mods-available/mpm_worker.load.bak 2>/dev/null || true
+
 # Install dependencies and MongoDB driver
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libssl-dev pkg-config \
@@ -9,9 +13,8 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Disable all MPMs except mpm_prefork
-RUN a2dismod mpm_event mpm_worker 2>/dev/null || true \
-    && a2enmod mpm_prefork
+# Enable mpm_prefork explicitly
+RUN a2enmod mpm_prefork 2>/dev/null || true
 
 COPY . /var/www/html/
 
