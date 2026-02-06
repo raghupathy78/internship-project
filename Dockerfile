@@ -12,25 +12,45 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure Nginx for PHP-FPM
-RUN mkdir -p /etc/nginx/sites-enabled && \
-    echo 'server {\n\
-    listen 80;\n\
-    server_name _;\n\
-    root /var/www/html;\n\
-    index index.php index.html;\n\
-    location ~ \\.php$ {\n\
-        fastcgi_pass 127.0.0.1:9000;\n\
-        fastcgi_index index.php;\n\
-        fastcgi_param SCRIPT_FILENAME \\;\n\
-        include fastcgi_params;\n\
-    }\n\
-}' > /etc/nginx/sites-available/default && \
-    ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+# Configure PHP-FPM to listen on TCP port 9000
+RUN sed -i 's/^listen = .*/listen = 9000/' /usr/local/etc/php-fpm.d/www.conf
+
+# Create Nginx config
+RUN mkdir -p /etc/nginx/sites-enabled && cat > /etc/nginx/sites-available/default << 'EOF'
+server {
+    listen 80;
+    server_name _;
+    root /var/www/html;
+    index index.php index.html;
+    
+    location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME \\;
+        include fastcgi_params;
+    }
+}
+EOF
+RUN ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+
+# Disable Nginx default server
+RUN rm -f /etc/nginx/sites-enabled/default.conf 2>/dev/null || true
+
+WORKDIR /var/www/html
 
 COPY . /var/www/html/
 
+RUN chown -R www-data:www-data /var/www/html
+
 EXPOSE 80
 
-#Start both PHP-FPM and Nginx
-CMD ["sh", "-c", "php-fpm && nginx -g \"daemon off;\""]
+# Create startup script
+RUN cat > /start.sh << 'EOF'
+#!/bin/bash
+set -e
+php-fpm &
+nginx -g "daemon off;"
+EOF
+RUN chmod +x /start.sh
+
+CMD ["/start.sh"]
