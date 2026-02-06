@@ -1,39 +1,17 @@
-FROM php:8.2-fpm-alpine
+﻿FROM php:8.2-apache
 
-# Install Nginx (no MPM conflicts)
-RUN apk add --no-cache nginx openssl openssl-dev pkgconfig
+# Install dependencies and MongoDB driver
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libssl-dev pkg-config \
+    && pecl install mongodb \
+    && docker-php-ext-enable mongodb \
+    && docker-php-ext-install pdo pdo_mysql \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install mongodb extension
-RUN apk add --no-cache autoconf gcc g++ make && \
-    pecl install mongodb && \
-    docker-php-ext-enable mongodb && \
-    docker-php-ext-install pdo pdo_mysql && \
-    apk del autoconf gcc g++ make
-
-# Configure Nginx to proxy PHP requests to FPM
-RUN mkdir -p /etc/nginx/conf.d && \
-    echo 'upstream php-fpm {' > /etc/nginx/conf.d/upstream.conf && \
-    echo '    server unix:/run/php-fpm.sock;' >> /etc/nginx/conf.d/upstream.conf && \
-    echo '}' >> /etc/nginx/conf.d/upstream.conf && \
-    echo '' >> /etc/nginx/conf.d/upstream.conf && \
-    echo 'server {' >> /etc/nginx/conf.d/default.conf && \
-    echo '    listen 80 default_server;' >> /etc/nginx/conf.d/default.conf && \
-    echo '    root /var/www/html;' >> /etc/nginx/conf.d/default.conf && \
-    echo '    index index.php;' >> /etc/nginx/conf.d/default.conf && \
-    echo '    location ~ \.php$ {' >> /etc/nginx/conf.d/default.conf && \
-    echo '        fastcgi_pass php-fpm;' >> /etc/nginx/conf.d/default.conf && \
-    echo '        fastcgi_index index.php;' >> /etc/nginx/conf.d/default.conf && \
-    echo '        include fastcgi.conf;' >> /etc/nginx/conf.d/default.conf && \
-    echo '    }' >> /etc/nginx/conf.d/default.conf && \
-    echo '}' >> /etc/nginx/conf.d/default.conf
-
-COPY . /var/www/html/
-RUN chown -R www-data:www-data /var/www/html
-
-EXPOSE 80
-
-# Start PHP-FPM and Nginx
-CMD ["sh", "-c", "php-fpm -D && nginx -g 'daemon off;'"]
+# Disable all MPMs except mpm_prefork
+RUN a2dismod mpm_event mpm_worker 2>/dev/null || true \
+    && a2enmod mpm_prefork
 
 COPY . /var/www/html/
 
